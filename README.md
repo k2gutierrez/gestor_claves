@@ -16,7 +16,7 @@ Interacción: clap (argumentos), rpassword (input seguro), arboard (portapapeles
 
 # Termux
 - pkg update && pkg upgrade
-- pkg install rust git
+- pkg install rust git clang
 - pkg install libxcb termux-api
 - git clone https://github.com/k2gutierrez/gestor_claves
 - cd gestor_claves
