@@ -6,7 +6,12 @@ edition = "2024"
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-clap = { version = "4.0", features = ["derive"] }
-cocoon = "0.4"       # <-- Nueva: Para encriptar
-rpassword = "7.0"    # <-- Nueva: Para pedir password oculto
-arboard = "3.2"  # <-- ¡NUEVA! Para manejar el portapapeles
+cocoon = "0.4" # <-- Nueva: Para encriptar
+arboard = "3.2" # <-- ¡NUEVA! Para manejar el portapapeles
+inquire = "0.7"      # <-- ¡NUEVA! La magia de los menús
+
+[profile.release]
+strip = true      # Quita símbolos de depuración (reduce tamaño un 30-50%)
+opt-level = "z"   # Optimiza para tamaño (size) en lugar de velocidad máxima
+lto = true        # Link Time Optimization (limpia código muerto entre librerías)
+codegen-units = 1 # Hace la compilación más lenta pero el archivo final mejor optimizado

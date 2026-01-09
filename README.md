@@ -20,10 +20,14 @@ Interacción: clap (argumentos), rpassword (input seguro), arboard (portapapeles
 - pkg install libxcb termux-api
 - git clone https://github.com/k2gutierrez/gestor_claves
 - cd gestor_claves
-- cargo run
+- cargo run --release
 
 # Para correr la app en terminal
 - cargo run
+
+# Compilar para uso en android
+- cargo install cross
+- cross build --target aarch64-linux-android --release
 
 # Compilar la aplicación
 - cargo build --release

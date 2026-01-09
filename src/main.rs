@@ -1,24 +1,24 @@
 mod boveda;
 use boveda::{Boveda, Entrada};
-use std::io::{self, Write};
+use inquire::{Select, Text, Password, Confirm};
 use arboard::Clipboard; // Importamos la herramienta del portapapeles
-
-fn pedir_input(mensaje: &str) -> String {
-    print!("{}", mensaje);
-    io::stdout().flush().unwrap();
-    let mut buffer = String::new();
-    io::stdin().read_line(&mut buffer).unwrap();
-    buffer.trim().to_string()
-}
 
 // --- MAIN ---
 fn main() {
     let nombre_archivo = "mis_claves.db";
 
     println!("--- 🔒 GESTOR DE CLAVES SEGURO (RUST) ---");
-    print!("🔑 Introduce tu Contraseña Maestra: ");
-    io::stdout().flush().unwrap();
-    let password = rpassword::read_password().unwrap();
+    let password = Password::new("🔑 Introduce tu Contraseña Maestra:")
+        .without_confirmation()
+        .prompt();
+
+    let password = match password {
+        Ok(pass) => pass,
+        Err(_) => {
+            print!("Operación cancelada.");
+            return;
+        }
+    };
 
     let mut mi_boveda = match Boveda::cargar(nombre_archivo, &password) {
         Ok(boveda) => {
@@ -31,160 +31,160 @@ fn main() {
         }
     };
 
+    // Definimos las opciones del menú como un vector de texto
+    let opciones_menu = vec![
+        "1. Agregar nueva contraseña",
+        "2. Ver todas las contraseñas",
+        "3. Buscar y Copiar",
+        "4. Modificar contraseña",
+        "5. Eliminar contraseña",
+        "6. Guardar y Salir",
+    ];
+
     loop {
-        println!("\n--- MENÚ PRINCIPAL ---");
-        println!("1. Agregar nueva contraseña");
-        println!("2. Ver todas las contraseñas");
-        println!("3. Buscar y Copiar"); // <-- Actualizado
-        println!("4. Guardar y Salir");
-        println!("5. Eliminar contraseña y guardar");
-        println!("6. Modificar contraseña");
+        println!("\n--------------------------------");
         
-        let opcion = pedir_input("Elige una opción: ");
+        // 2. El Menú con Flechas
+        let seleccion = Select::new("¿Qué deseas hacer?", opciones_menu.clone())
+            .prompt(); // Muestra el menú interactivo
 
-        match opcion.as_str() {
-            "1" => {
-                let servicio = pedir_input("Servicio: ");
-                let usuario = pedir_input("Usuario: ");
-                let clave = pedir_input("Contraseña: ");
-                mi_boveda.agregar(Entrada { servicio, usuario, clave });
-                println!("✅ Entrada agregada.");
-            },
-            "2" => {
-                println!("\n--- TUS CLAVES ---");
-                for (i, entrada) in mi_boveda.entradas.iter().enumerate() {
-                    // Ocultamos la clave visualmente por seguridad
-                    println!("{}. [{}] Usuario: {} | Clave: ****", 
-                        i + 1, entrada.servicio, entrada.usuario);
-                }
-            },
-            "3" => {
-                let busqueda = pedir_input("¿Qué servicio buscas?: ").to_lowercase();
-                
-                // Filtramos y guardamos referencia al original
-                let encontrados: Vec<&Entrada> = mi_boveda.entradas.iter()
-                    .filter(|e| e.servicio.to_lowercase().contains(&busqueda))
-                    .collect();
+        match seleccion {
+            Ok(opcion) => {
+                // inquire nos devuelve el texto completo (ej: "1. Agregar..."), 
+                // así que verificamos con cuál empieza.
+                if opcion.starts_with("1") {
+                    // --- AGREGAR ---
+                    // Usamos Text::new para pedir datos limpios
+                    let servicio = Text::new("Servicio (ej. Facebook):").prompt().unwrap();
+                    let usuario = Text::new("Usuario/Email:").prompt().unwrap();
+                    let clave = Text::new("Contraseña:").prompt().unwrap();
 
-                if encontrados.is_empty() {
-                    println!("❌ No se encontró nada.");
-                } else {
-                    println!("🔎 Resultados encontrados:");
-                    // Mostramos índice local (1, 2, 3...)
-                    for (i, entrada) in encontrados.iter().enumerate() {
-                        println!("{}. [{}] Usuario: {}", i + 1, entrada.servicio, entrada.usuario);
+                    mi_boveda.agregar(Entrada { servicio, usuario, clave });
+                    println!("✅ Entrada agregada.");
+                } else if opcion.starts_with("2") {
+                    // --- VER TODAS ---
+                    println!("--- TUS CLAVES ---");
+                    for (i, entrada) in mi_boveda.entradas.iter().enumerate() {
+                        println!("{}. [{}] Usuario: {} | Clave: *****", i + 1, entrada.servicio, entrada.usuario);
                     }
-
-                    // PREGUNTAR SI QUIERE COPIAR
-                    println!("---");
-                    let seleccion = pedir_input("Escribe el número para COPIAR la clave (o 0 para cancelar): ");
+                } else if opcion.starts_with("3") {
+                    // --- BUSCAR Y COPIAR ---
+                    let busqueda = Text::new("Buscar servicio:").prompt().unwrap().to_lowercase();
+                    let encontrados: Vec<&Entrada> = mi_boveda.entradas.iter()
+                        .filter(|e| e.servicio.to_lowercase().contains(&busqueda))
+                        .collect();
                     
-                    // Convertimos el texto a número (usize)
-                    if let Ok(indice) = seleccion.parse::<usize>() {
-                        if indice > 0 && indice <= encontrados.len() {
-                            let entrada_elegida = encontrados[indice - 1];
-                            
-                            // INTENTAMOS COPIAR AL PORTAPAPELES
-                            match Clipboard::new() {
-                                Ok(mut clipboard) => {
-                                    // setText pone el texto en el portapapeles
-                                    if let Err(e) = clipboard.set_text(&entrada_elegida.clave) {
-                                        println!("❌ Error al copiar: {}", e);
-                                    } else {
-                                        println!("✨ ¡Clave de {} copiada al portapapeles! (Ya puedes hacer Ctrl+V)", entrada_elegida.servicio);
-                                    }
-                                },
-                                Err(e) => println!("❌ No pude acceder al portapapeles: {}", e),
-                            }
-                        } else if indice != 0 {
-                            println!("❌ Número inválido.");
-                        }
-                    }
-                }
-            },
-            "4" => {
-                match mi_boveda.guardar(nombre_archivo, &password) {
-                    Ok(_) => println!("💾 Guardado. ¡Hasta luego!"),
-                    Err(e) => println!("❌ Error al guardar: {}", e),
-                }
-                break;
-            },
-            "5" => {
-                println!("\n--- ELIMINAR CONTRASEÑA ---");
-                for (i, entrada) in mi_boveda.entradas.iter().enumerate() {
-                    // Ocultamos la clave visualmente por seguridad
-                    println!("{}. [{}] Usuario: {} | Clave: ****", 
-                        i + 1, entrada.servicio, entrada.usuario);
-                }
-
-                // PREGUNTAR SI QUIERE COPIAR
-                println!("---");
-                let seleccion = pedir_input("Escribe el número de contraseña a borrar (0 para cancelar): ");
-                // Convertimos el texto a número (usize)
-                if let Ok(indice) = seleccion.parse::<usize>() {
-                    if indice > 0 {
-                        match mi_boveda.eliminar(indice - 1) {
-                            Ok(_) => {
-                                println!("Contraseña eliminada exitosamente!");
-                                match mi_boveda.guardar(nombre_archivo, &password) {
-                                    Ok(_) => println!("💾 Guardado. ¡Hasta luego!"),
-                                    Err(e) => println!("❌ Error al guardar: {}", e),
-                                }
-                            },
-                            Err(e) => println!("❌ No pude borrar la contraseña: {}", e),
-                        }
+                    if encontrados.is_empty() {
+                        println!("❌ No se encontró nada.");
                     } else {
-                        println!("Operación cancelada.");
-                    } 
-                } else  {
-                    println!("❌ Eso no es un número válido.");
-                }
-
-            },
-            "6" => {
-                println!("\n--- MODIFICAR CONTRASEÑA ---");
-                // Listamos...
-                for (i, entrada) in mi_boveda.entradas.iter().enumerate() {
-                    println!("{}. [{}] Usuario: {} | Clave: ****", 
-                        i + 1, entrada.servicio, entrada.usuario);
-                }
-                
-                println!("---");
-                let seleccion = pedir_input("Escribe el número del servicio a actualizar (0 cancelar): ");
-                
-                if let Ok(indice) = seleccion.parse::<usize>() {
-                    if indice > 0 && indice <= mi_boveda.entradas.len() {
+                        // Creamos una lista de strings para el menú de selección
+                        // Format! nos ayuda a crear textos dinámicos
+                        let opciones_busqueda: Vec<String> = encontrados.iter()
+                            .map(|e| format!("[{}] {}", e.servicio, e.usuario))
+                            .collect();
                         
-                        // MEJORA 1: Pedir password oculto (como la clave maestra)
-                        print!("Escribe la NUEVA contraseña (no se verá): ");
-                        io::stdout().flush().unwrap();
-                        let nuevo_password = rpassword::read_password().unwrap();
+                        // Mostramos un sub-menú para elegir cuál copiar
+                        let eleccion = Select::new("Selecciona para copiar:", opciones_busqueda).prompt();
 
-                        // MEJORA 2: Usar is_empty() que es más rápido y eficiente que chars().count()
-                        if nuevo_password.trim().is_empty() {
-                            println!("❌ Error: La contraseña no puede estar vacía. Operación cancelada.");
-                        } else {
-                            // Solo entramos aquí si hay contraseña real
-                            match mi_boveda.editar(indice - 1, nuevo_password) {
-                                Ok(_) => {
-                                    println!("✨ ¡La clave se ha modificado exitosamente!");
-                                    match mi_boveda.guardar(nombre_archivo, &password) {
-                                        Ok(_) => println!("💾 Cambios guardados en disco."),
-                                        Err(e) => println!("❌ Error al guardar: {}", e),
+                        if let Ok(seleccion_texto) = eleccion {
+                            // Buscamos cuál eligió el usuario en base al texto
+                            if let Some(entrada_elegida) = encontrados.iter().find(|e| format!("[{}] {}", e.servicio, e.usuario) == seleccion_texto) {
+                                
+                                // CASO A: NO estamos en Android (PC, Mac, Linux Desktop)
+                                #[cfg(not(target_os = "android"))]
+                                {
+                                    match Clipboard::new() {
+                                        Ok(mut clipboard) => {
+                                            if let Err(e) = clipboard.set_text(&entrada_elegida.clave) {
+                                                println!("❌ Error al copiar: {}", e);
+                                            } else {
+                                                println!("✨ ¡Clave de {} copiada! (Ctrl+V)", entrada_elegida.servicio);
+                                            }
+                                        },
+                                        Err(_) => println!("❌ No pude acceder al portapapeles en este sistema."),
                                     }
-                                },
-                                Err(e) => println!("❌ Error al modificar: {}", e),
+                                }
+
+                                // CASO B: SÍ estamos en Android
+                                #[cfg(target_os = "android")]
+                                {
+                                    println!("📱 Modo Android detectado: El copiado automático está desactivado por seguridad/compatibilidad.");
+                                    println!("🔑 Tu clave es: {}", entrada_elegida.clave);
+                                    println!("(Puedes seleccionarla y copiarla manualmente)");
+                                }
+
                             }
                         }
-
-                    } else if indice != 0 {
-                        println!("❌ Número inválido.");
                     }
-                } else {
-                    println!("❌ Eso no es un número.");
+                } else if opcion.starts_with("4") {
+                    // --- MODIFICAR ---
+                    // Usamos Select para elegir qué modificar, en lugar de escribir índice
+                    let opciones_editar: Vec<String> = mi_boveda.entradas.iter()
+                        .enumerate()
+                        .map(|(i, e)| format!("{}. [{}] {}", i + 1, e.servicio, e.usuario))
+                        .collect();
+
+                    let seleccion_editar = Select::new("Elige cuál modificar:", opciones_editar).prompt();
+
+                    if let Ok(texto) = seleccion_editar {
+                        // Extraemos el número del principio del string "1. [Facebook]..."
+                        let partes: Vec<&str> = texto.split('.').collect();
+                        if let Ok(indice) = partes[0].parse::<usize>() {
+                            
+                            // Pedimos la nueva clave oculta
+                            let nueva_clave = Password::new("Nueva contraseña:")
+                                .with_display_mode(inquire::PasswordDisplayMode::Masked) // Muestra * en vez de nada
+                                .without_confirmation()
+                                .prompt()
+                                .unwrap();
+
+                            if !nueva_clave.trim().is_empty() {
+                                let _ = mi_boveda.editar(indice - 1, nueva_clave);
+                                println!("✨ Modificada y guardada en memoria.");
+                                // Podrías guardar auto aquí si quieres
+                                let _ = mi_boveda.guardar(nombre_archivo, &password);
+                            }
+                        }
+                    }
+                } else if opcion.starts_with("5") {
+                    // --- ELIMINAR ---
+                    let opciones_borrar: Vec<String> = mi_boveda.entradas.iter()
+                        .enumerate()
+                        .map(|(i, e)| format!("{}. [{}] {}", i + 1, e.servicio, e.usuario))
+                        .collect();
+
+                    let seleccion_borrar = Select::new("❌ ELIMINAR: Elige cuál borrar:", opciones_borrar).prompt();
+
+                    if let Ok(texto) = seleccion_borrar {
+                        // Confirmación de seguridad
+                        let seguro = Confirm::new("¿Estás seguro de que quieres borrarla para siempre?")
+                            .with_default(false)
+                            .prompt();
+
+                        if let Ok(true) = seguro {
+                            let partes: Vec<&str> = texto.split('.').collect();
+                            if let Ok(indice) = partes[0].parse::<usize>() {
+                                let _ = mi_boveda.eliminar(indice - 1);
+                                println!("🗑️ Eliminada.");
+                                let _ = mi_boveda.guardar(nombre_archivo, &password);
+                            }
+                        } else {
+                            println!("Operación cancelada.");
+                        }
+                    }
+                } else if opcion.starts_with("6") {
+                    // --- SALIR ---
+                    match mi_boveda.guardar(nombre_archivo, &password) {
+                        Ok(_) => println!("💾 Guardado. ¡Hasta luego!"),
+                        Err(e) => println!("❌ Error al guardar: {}", e),
+                    }
+                    break;
                 }
             },
-            _ => println!("❌ Opción no válida."),
+            Err(_) => {
+                println!("Error en el menú o cancelación.");
+                break;
+            }
         }
     }
 }
